@@ -1,16 +1,19 @@
 use std::{collections::HashMap, fmt::{self, Display}};
 
 use reqwest::blocking::Response;
-use anyhow::{bail, Error, Result};
-use serde::Deserialize;
-
-use crate::Rates;
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct ApiError {
     message: String,
     errors: HashMap<String, Vec<String>>,
     info: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Rates {
+    data: HashMap<String, f32>,
 }
 
 impl Display for ApiError {
@@ -48,7 +51,7 @@ pub fn fetch_rates(source: &str, targets: Vec<&str>, api_key: &str) -> Result<Ra
     Ok(rates)
 }
 
-pub fn exchange(source: &str, target: &str, amount: f32, rates: &Rates) -> Option<f32> {
+pub fn exchange(target: &str, amount: f32, rates: &Rates) -> Option<f32> {
     if !rates.data.contains_key(target) {
         return None;
     }
@@ -56,4 +59,8 @@ pub fn exchange(source: &str, target: &str, amount: f32, rates: &Rates) -> Optio
     let rate = rates.data.get(target)?;
 
     Some(amount * rate)
+}
+
+pub fn get_rate(rates: &Rates, currency_code: &str) -> Option<f32> {
+    return rates.data.get(currency_code).copied();
 }
