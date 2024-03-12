@@ -2,7 +2,7 @@
 
 use crate::{
     cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
-    exchange::{exchange, fetch_rates, fetch_currency_info, get_rate},
+    exchange::{exchange, fetch_currency_info, fetch_rates, get_rate},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
@@ -15,7 +15,7 @@ mod params;
 
 // Git style help printing
 fn print_help() {
-    println!("Simple cli currecy converter");
+    println!("Simple cli currency converter");
     println!("Usage:");
     println!("\t./teonite -s PLN -t USD -a 43.123");
     println!("Parameters:");
@@ -32,6 +32,7 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_currency_cache(&params.source_currency_code);
     let currency_info = read_from_cache(&path).or_else(|| {
         fetch_currency_info(&params.source_currency_code, &api_key)
+            .map_err(|e| println!("{}", e))
             .inspect(|info| {
                 let _ = cache_data(&path, info);
             })

@@ -3,21 +3,27 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
+// NOTE: Cached hourly
 pub fn get_path_to_exchange_cache(source: &str) -> PathBuf {
     return PathBuf::from(format!(
         r"./.teonite/cache/{}{}.json",
         source,
-        get_current_date()
+        get_date_formatted("%H00%d%m%Y")
     ));
 }
 
+// Cached daily
 pub fn get_path_to_currency_cache(source: &str) -> PathBuf {
-    return PathBuf::from(format!(r"./.teonite/cache/{}.json", source,));
+    return PathBuf::from(format!(
+        r"./.teonite/cache/{}{}.json",
+        source,
+        get_date_formatted("%d%m%Y")
+    ));
 }
 
-fn get_current_date() -> String {
+fn get_date_formatted(format: &str) -> String {
     let utc: DateTime<Utc> = Utc::now();
-    utc.format("%H00%d%m%Y").to_string()
+    utc.format(format).to_string()
 }
 
 pub fn cache_data<T: Serialize>(path: &PathBuf, rates: &T) -> Result<()> {
@@ -27,16 +33,14 @@ pub fn cache_data<T: Serialize>(path: &PathBuf, rates: &T) -> Result<()> {
     fs::write(&path, serialized)
         .context(format!("Failed to cache exchange rates: '{:?}'", path))?;
 
-    eprintln!("Cached in: '{:?}'", path);
     Ok(())
 }
 
 pub fn read_from_cache<T: for<'a> Deserialize<'a>>(path: &PathBuf) -> Option<T> {
     return match fs::read_to_string(path) {
         Ok(contents) => {
-            let obj: T = serde_json::from_str(&contents).expect(
-                "Failed to parse cached data. Please clear .teonite/cache folder.",
-            );
+            let obj: T = serde_json::from_str(&contents)
+                .expect("Failed to parse cached data. Please clear .teonite/cache folder.");
             Some(obj)
         }
         Err(_) => None,
