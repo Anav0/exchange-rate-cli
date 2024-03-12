@@ -20,7 +20,7 @@ fn print_help() {
     println!("\t./teonite -s PLN -t USD,EUR -a 12.123");
     println!("Parameters:");
     println!("{:<12}{}", "-s", "source currency code e.g. EUR");
-    println!("{:<12}{}", "-t", "target currency code e.g. USD,PLN,EUR");
+    println!("{:<12}{}", "-t", "target currencies code e.g. USD,PLN,EUR");
     println!(
         "{:<12}{}",
         "-a", "amount to convert from source currency to target currency"
@@ -30,14 +30,21 @@ fn print_help() {
 
 fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_currency_cache(&params.source_currency_code);
-    let currency_info = read_from_cache(&path).or_else(|| {
-        fetch_currency_info(&params.source_currency_code, &api_key)
-            .map_err(|e| println!("{}", e))
-            .inspect(|info| {
-                let _ = cache_data(&path, info);
-            })
-            .ok()
-    });
+    let currency_info = read_from_cache(&path)
+        .and_then(|v| {
+            if params.force_refetch {
+                return None;
+            }
+            Some(v)
+        })
+        .or_else(|| {
+            fetch_currency_info(&params.source_currency_code, &api_key)
+                .map_err(|e| println!("{}", e))
+                .inspect(|info| {
+                    let _ = cache_data(&path, info);
+                })
+                .ok()
+        });
     if currency_info.is_none() {
         bail!("Failed to fetch currency information");
     }
@@ -54,20 +61,32 @@ fn update_exchange_rate_cache(
     source: &str,
     targets: &Vec<String>,
     api_key: &str,
-    mut rates: Rates,
+    mut cached_rates: Rates,
 ) -> Option<Rates> {
+    let mut not_cached_target_exists = false;
+    for target in targets {
+        if !cached_rates.data.contains_key(target) {
+            not_cached_target_exists = true;
+            break;
+        }
+    }
+
+    if !not_cached_target_exists {
+        return Some(cached_rates)
+    }
+
     let fetched_rate = fetch_rates(&source, targets, &api_key).ok()?;
 
     for (code, rate) in fetched_rate.data {
-        rates.data.insert(code, rate);
+        cached_rates.data.insert(code, rate);
     }
 
     let path = get_path_to_exchange_cache(source);
-    let _ = cache_data(&path, &rates);
-    Some(rates)
+    let _ = cache_data(&path, &cached_rates);
+    Some(cached_rates)
 }
 
-fn print_single_exchange_rate(params: &Parameters, api_key: &str) -> Result<()> {
+fn print_selected_exchange_rate(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_exchange_cache(&params.source_currency_code);
     let rates: Option<Rates> = read_from_cache(&path)
         .and_then(|v| {
@@ -136,7 +155,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    print_single_exchange_rate(&params, &api_key)?;
+    print_selected_exchange_rate(&params, &api_key)?;
 
     Ok(())
 }
