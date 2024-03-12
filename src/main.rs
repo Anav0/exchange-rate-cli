@@ -2,7 +2,7 @@
 
 use crate::{
     cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
-    exchange::{exchange, fetch_rates, get_all_currency_codes, get_rate},
+    exchange::{exchange, fetch_rates, fetch_currency_info, get_rate},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
@@ -30,7 +30,13 @@ fn print_help() {
 
 fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_currency_cache(&params.source_currency_code);
-    let currency_info = read_from_cache(&path).or_else(|| get_all_currency_codes(&params.source_currency_code, &api_key).ok());
+    let currency_info = read_from_cache(&path).or_else(|| {
+        fetch_currency_info(&params.source_currency_code, &api_key)
+            .inspect(|info| {
+                let _ = cache_data(&path, info);
+            })
+            .ok()
+    });
     if currency_info.is_none() {
         bail!("Failed to fetch currency information");
     }
