@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 struct ApiError {
     message: String,
     errors: HashMap<String, Vec<String>>,
-    info: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

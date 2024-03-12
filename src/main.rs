@@ -2,12 +2,12 @@
 
 use crate::{
     cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
-    exchange::{exchange, fetch_rates, get_all_currency_codes, get_rate, CurrencyCode},
+    exchange::{exchange, fetch_rates, get_all_currency_codes, get_rate},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
 use dotenv::dotenv;
-use std::{env, fs::read, process::exit};
+use std::env;
 
 mod cache;
 mod exchange;
@@ -28,36 +28,21 @@ fn print_help() {
     println!("{:<12}{}", "-f, --force", "fetch data each time");
 }
 
-fn main() -> Result<()> {
-    dotenv().ok();
-
-    let api_key: String = std::env::var("API_KEY").context("API_KEY must be set in .env file")?;
-
-    let params = Parameters::try_from(env::args())?;
-
-    if params.print_help {
-        print_help();
-        exit(0);
+fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
+    let path = get_path_to_currency_cache(&params.source_currency_code);
+    let currency_info = read_from_cache(&path).or_else(|| get_all_currency_codes(&params.source_currency_code, &api_key).ok());
+    if currency_info.is_none() {
+        bail!("Failed to fetch currency information");
     }
+    let currency_info = currency_info.unwrap();
+    let codes = currency_info.data.keys().cloned();
+    let rates = fetch_rates(&params.source_currency_code, codes, &api_key)?;
+    cache_data(&path, &currency_info)?;
+    println!("{}", rates);
+    Ok(())
+}
 
-    if params.list_all_rates {
-        let path = get_path_to_currency_cache(&params.source_currency_code);
-        let all_codes = read_from_cache(&path)
-            .or_else(|| get_all_currency_codes(&params.source_currency_code, &api_key).ok());
-
-        if all_codes.is_none() {
-            bail!("Failed to fetch currency information");
-        }
-
-        let currency_info = all_codes.unwrap();
-
-        let codes = currency_info.data.keys().cloned();
-        let rates = fetch_rates(&params.source_currency_code, codes, &api_key)?;
-        cache_data(&path, &currency_info)?;
-        println!("{}", rates);
-        exit(0);
-    }
-
+fn print_single_exchange_rate(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_exchange_cache(&params.source_currency_code);
     let rates = read_from_cache(&path).or_else(|| {
         let codes = vec![params.target_currency_code.clone()];
@@ -68,23 +53,18 @@ fn main() -> Result<()> {
             })
             .ok()
     });
-
     if rates.is_none() {
         return Ok(());
     }
-
     let rates = rates.unwrap(); //At this point we know we have rates
-
     let after_exchange = exchange(&params.target_currency_code, params.amount, &rates);
-
     if after_exchange.is_none() {
         bail!(
-            "Faild to find exchange rate for: '{}' - '{}'",
+            "Cannot exchange: '{}' - '{}'",
             &params.source_currency_code,
             &params.target_currency_code
         );
     }
-
     println!(
         "{} {} is equal to {} {} (rate: {})",
         params.amount,
@@ -93,6 +73,27 @@ fn main() -> Result<()> {
         params.target_currency_code,
         get_rate(&rates, &params.target_currency_code).unwrap(),
     );
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    dotenv().ok();
+
+    let api_key: String = std::env::var("API_KEY").context("API_KEY must be set in .env file")?;
+
+    let params = Parameters::try_from(env::args())?;
+
+    if params.print_help {
+        print_help();
+        return Ok(());
+    }
+
+    if params.list_all_rates {
+        print_all_exchange_rates(&params, &api_key)?;
+        return Ok(());
+    }
+
+    print_single_exchange_rate(&params, &api_key)?;
 
     Ok(())
 }

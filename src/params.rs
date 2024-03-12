@@ -1,11 +1,7 @@
-use std::process::exit;
-
 use anyhow::Context;
 
-use crate::{print_help};
-
 // Normalnie użyłbym biblioteki clap do parsowania argumentów ale
-// chciałem zaprezentować znajomość From<Args>
+// chciałem zaprezentować znajomość TryFrom<Args>
 #[derive(Debug)]
 pub struct Parameters {
     pub source_currency_code: String,
@@ -16,7 +12,6 @@ pub struct Parameters {
     pub print_help: bool,
 }
 
-//TODO: round to three decimal places
 impl TryFrom<std::env::Args> for Parameters {
     fn try_from(mut args: std::env::Args) -> Result<Self, Self::Error> {
         let mut force_refetch = false;
@@ -44,7 +39,13 @@ impl TryFrom<std::env::Args> for Parameters {
                         .next()
                         .context("Expected valid amount after -a paramter")?
                         .parse()
-                        .context("Amount given is not a valid number")?
+                        .context("Amount given is not a valid number")?;
+
+                    if amount < 0. {
+                        amount *= -1.;
+                    }
+                    //TODO: adjust rounding based on currencies rounding specification
+                    amount = (amount * 1000.0).round() / 1000.0;
                 }
                 "-f" | "--force" => force_refetch = true,
                 "-h" | "--help" => print_help = true,
