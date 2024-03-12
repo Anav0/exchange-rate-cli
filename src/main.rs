@@ -1,13 +1,13 @@
 #![feature(slice_concat_trait)]
 
 use crate::{
-    cache::{cache_exchange_rates, get_rates_from_cache},
+    cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
     exchange::{exchange, fetch_rates, get_all_currency_codes, get_rate, CurrencyCode},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
 use dotenv::dotenv;
-use std::{env, process::exit};
+use std::{env, fs::read, process::exit};
 
 mod cache;
 mod exchange;
@@ -41,19 +41,30 @@ fn main() -> Result<()> {
     }
 
     if params.list_all_rates {
-        let all_codes = get_all_currency_codes().context("Failed to get all currency codes")?;
-        let codes = all_codes.keys().cloned();
+        let path = get_path_to_currency_cache(&params.source_currency_code);
+        let all_codes = read_from_cache(&path)
+            .or_else(|| get_all_currency_codes(&params.source_currency_code, &api_key).ok());
+
+        if all_codes.is_none() {
+            bail!("Failed to fetch currency information");
+        }
+
+        let currency_info = all_codes.unwrap();
+
+        let codes = currency_info.data.keys().cloned();
         let rates = fetch_rates(&params.source_currency_code, codes, &api_key)?;
+        cache_data(&path, &currency_info)?;
         println!("{}", rates);
         exit(0);
     }
 
-    let rates = get_rates_from_cache(&params.source_currency_code).or_else(|| {
+    let path = get_path_to_exchange_cache(&params.source_currency_code);
+    let rates = read_from_cache(&path).or_else(|| {
         let codes = vec![params.target_currency_code.clone()];
         fetch_rates(&params.source_currency_code, codes, &api_key)
             .map_err(|e| println!("{}", e))
             .inspect(|r| {
-                cache_exchange_rates(&params.source_currency_code, r);
+                let _ = cache_data(&path, r);
             })
             .ok()
     });

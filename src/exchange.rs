@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display},
-    fs,
     slice::Join,
 };
 
@@ -43,15 +42,11 @@ impl Display for ApiError {
 
 pub fn fetch_rates<'a, C, T>(source: &str, targets: C, api_key: &str) -> Result<Rates>
 where
+    C: IntoIterator<Item = T>,
     T: AsRef<str>,
     [T]: Join<&'a str, Output = String>,
-    C: IntoIterator<Item = T>,
 {
     let url = "https://api.freecurrencyapi.com/v1/latest";
-
-    let y : HashMap<String, u32>;
-    // let xx = y.keys().cloned().collect::<Vec<String>>().join(",");
-    // let x = vec!["A", "b"].join(",");
 
     let full_url = format!(
         "{}?apikey={}&currencies={}&base_currency={}",
@@ -72,6 +67,7 @@ where
     let rates: Rates = response
         .json()
         .expect("Failed to parse json data recived from exchange rate service");
+
     Ok(rates)
 }
 
@@ -91,21 +87,22 @@ pub fn get_rate(rates: &Rates, currency_code: &str) -> Option<f32> {
 
 pub type CurrencyCode = String; // [char; 3]
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Currency {
-    pub symbol: String,
     pub name: String,
-    pub symbol_native: String,
     pub decimal_digits: u8,
     pub rounding: f32,
     pub code: CurrencyCode,
-    pub name_plural: String,
 }
 
-pub fn get_all_currency_codes() -> Result<HashMap<CurrencyCode, Currency>> {
-    let contents = fs::read_to_string(r"resources\currrencies.json")?;
-    let currencies_map: HashMap<CurrencyCode, Currency> =
-        serde_json::from_str(&contents).context("Failed to parse currencies.json file")?;
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CurrencyInfo {
+    pub data: HashMap<String, Currency>
+}
 
-    Ok(currencies_map)
+pub fn get_all_currency_codes(source: &str, api_key: &str) -> Result<CurrencyInfo> {
+    let full_url= format!("https://api.freecurrencyapi.com/v1/currencies?apikey={api_key}&base_currency={source}");
+    let response: Response = reqwest::blocking::get(full_url)?;
+    let currency_info: CurrencyInfo = response.json().context("Faild to parse currency information")?;
+    Ok(currency_info)
 }
