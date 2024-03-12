@@ -1,7 +1,12 @@
-use std::{collections::HashMap, fmt::{self, Display}};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    fs,
+    slice::Join,
+};
 
+use anyhow::{bail, Context, Result};
 use reqwest::blocking::Response;
-use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -16,8 +21,17 @@ pub struct Rates {
     data: HashMap<String, f32>,
 }
 
+impl Display for Rates {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (currency, rate) in &self.data {
+            writeln!(f, "{}: {}", currency, rate)?;
+        }
+        Ok(())
+    }
+}
+
 impl Display for ApiError {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ApiError: {}\n", self.message)?;
         write!(f, "Errors:\n")?;
         for (key, value) in &self.errors {
@@ -27,13 +41,23 @@ impl Display for ApiError {
     }
 }
 
-pub fn fetch_rates(source: &str, targets: Vec<&str>, api_key: &str) -> Result<Rates> {
+pub fn fetch_rates<'a, C, T>(source: &str, targets: C, api_key: &str) -> Result<Rates>
+where
+    T: AsRef<str>,
+    [T]: Join<&'a str, Output = String>,
+    C: IntoIterator<Item = T>,
+{
     let url = "https://api.freecurrencyapi.com/v1/latest";
+
+    let y : HashMap<String, u32>;
+    // let xx = y.keys().cloned().collect::<Vec<String>>().join(",");
+    // let x = vec!["A", "b"].join(",");
+
     let full_url = format!(
         "{}?apikey={}&currencies={}&base_currency={}",
         url,
         api_key,
-        targets.join(","),
+        targets.into_iter().collect::<Vec<T>>().join(","),
         source
     );
     //logging
@@ -63,4 +87,25 @@ pub fn exchange(target: &str, amount: f32, rates: &Rates) -> Option<f32> {
 
 pub fn get_rate(rates: &Rates, currency_code: &str) -> Option<f32> {
     return rates.data.get(currency_code).copied();
+}
+
+pub type CurrencyCode = String; // [char; 3]
+
+#[derive(Debug, Deserialize)]
+pub struct Currency {
+    pub symbol: String,
+    pub name: String,
+    pub symbol_native: String,
+    pub decimal_digits: u8,
+    pub rounding: f32,
+    pub code: CurrencyCode,
+    pub name_plural: String,
+}
+
+pub fn get_all_currency_codes() -> Result<HashMap<CurrencyCode, Currency>> {
+    let contents = fs::read_to_string(r"resources\currrencies.json")?;
+    let currencies_map: HashMap<CurrencyCode, Currency> =
+        serde_json::from_str(&contents).context("Failed to parse currencies.json file")?;
+
+    Ok(currencies_map)
 }
