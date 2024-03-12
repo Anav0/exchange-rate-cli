@@ -5,7 +5,7 @@ use anyhow::Context;
 #[derive(Debug)]
 pub struct Parameters {
     pub source_currency_code: String,
-    pub target_currency_code: String,
+    pub target_currency_code: Vec<String>,
     pub amount: f32,
     pub list_all_rates: bool,
     pub force_refetch: bool,
@@ -19,7 +19,7 @@ impl TryFrom<std::env::Args> for Parameters {
         let mut print_help = false;
 
         let mut source_currency_code = String::new();
-        let mut target_currency_code = String::new();
+        let mut target_currency_code = vec![];
         let mut amount: f32 = 0.0;
 
         while let Some(arg) = args.next() {
@@ -30,9 +30,14 @@ impl TryFrom<std::env::Args> for Parameters {
                         .context("Expected valid currency code after -s parameter")?
                 }
                 "-t" => {
-                    target_currency_code = args
+                    let target_currency_str = args
                         .next()
-                        .context("Expected valid currency code after -t paramter")?
+                        .context("Expected valid currency code after -t paramter")?;
+
+                    target_currency_code = target_currency_str
+                        .split(",")
+                        .map(|v| v.to_string())
+                        .collect();
                 }
                 "-a" => {
                     amount = args

@@ -46,3 +46,21 @@ pub fn read_from_cache<T: for<'a> Deserialize<'a>>(path: &PathBuf) -> Option<T> 
         Err(_) => None,
     };
 }
+
+pub fn update_cache(source: &str, target: String, api_key: &str, mut rates: Rates) -> Option<Rates> {
+    if !rates.data.contains_key(&target) {
+        let codes = vec![target.clone()];
+        let fetched_rate = fetch_rates(&source, codes, &api_key).ok();
+
+        if fetched_rate.is_some() {
+            rates.data.insert(
+                target.clone(),
+                fetched_rate.unwrap().data.get(&target)?.clone(),
+            );
+        }
+        let path = get_path_to_exchange_cache(source);
+        let _ = cache_data(&path, &rates);
+    }
+
+    Some(rates)
+}

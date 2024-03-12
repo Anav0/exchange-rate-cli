@@ -2,7 +2,7 @@
 
 use crate::{
     cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
-    exchange::{exchange, fetch_currency_info, fetch_rates, get_rate},
+    exchange::{exchange, fetch_currency_info, fetch_rates, get_rate, Rates},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
@@ -17,10 +17,10 @@ mod params;
 fn print_help() {
     println!("Simple cli currency converter");
     println!("Usage:");
-    println!("\t./teonite -s PLN -t USD -a 43.123");
+    println!("\t./teonite -s PLN -t USD,EUR -a 12.123");
     println!("Parameters:");
     println!("{:<12}{}", "-s", "source currency code e.g. EUR");
-    println!("{:<12}{}", "-t", "target currency code e.g. USD");
+    println!("{:<12}{}", "-t", "target currency code e.g. USD,PLN,EUR");
     println!(
         "{:<12}{}",
         "-a", "amount to convert from source currency to target currency"
@@ -42,44 +42,80 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
         bail!("Failed to fetch currency information");
     }
     let currency_info = currency_info.unwrap();
-    let codes = currency_info.data.keys().cloned();
-    let rates = fetch_rates(&params.source_currency_code, codes, &api_key)?;
+    let codes: Vec<String> = currency_info.data.keys().cloned().collect();
+    let rates = fetch_rates(&params.source_currency_code, &codes, &api_key)?;
     cache_data(&path, &currency_info)?;
     println!("{}", rates);
     Ok(())
 }
 
+//TODO: change String to AsRef
+fn update_exchange_rate_cache(
+    source: &str,
+    targets: &Vec<String>,
+    api_key: &str,
+    mut rates: Rates,
+) -> Option<Rates> {
+    let fetched_rate = fetch_rates(&source, targets, &api_key).ok()?;
+
+    for (code, rate) in fetched_rate.data {
+        rates.data.insert(code, rate);
+    }
+
+    let path = get_path_to_exchange_cache(source);
+    let _ = cache_data(&path, &rates);
+    Some(rates)
+}
+
 fn print_single_exchange_rate(params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_exchange_cache(&params.source_currency_code);
-    let rates = read_from_cache(&path).or_else(|| {
-        let codes = vec![params.target_currency_code.clone()];
-        fetch_rates(&params.source_currency_code, codes, &api_key)
+    let rates: Option<Rates> = read_from_cache(&path)
+        .and_then(|v| {
+            update_exchange_rate_cache(
+                &params.source_currency_code,
+                &params.target_currency_code,
+                &api_key,
+                v,
+            )
+        })
+        .or_else(|| {
+            fetch_rates(
+                &params.source_currency_code,
+                &params.target_currency_code,
+                &api_key,
+            )
             .map_err(|e| println!("{}", e))
             .inspect(|r| {
                 let _ = cache_data(&path, r);
             })
             .ok()
-    });
+        });
+
     if rates.is_none() {
         return Ok(());
     }
+
     let rates = rates.unwrap(); //At this point we know we have rates
-    let after_exchange = exchange(&params.target_currency_code, params.amount, &rates);
-    if after_exchange.is_none() {
-        bail!(
-            "Cannot exchange: '{}' - '{}'",
-            &params.source_currency_code,
-            &params.target_currency_code
+
+    for target in &params.target_currency_code {
+        let after_exchange = exchange(&target, params.amount, &rates);
+        if after_exchange.is_none() {
+            bail!(
+                "Cannot exchange: '{}' - '{}'",
+                &params.source_currency_code,
+                target
+            );
+        }
+        println!(
+            "{:.3} {} is equal to {:.3} {} (rate: {})",
+            params.amount,
+            params.source_currency_code,
+            after_exchange.unwrap(),
+            target,
+            get_rate(&rates, &target).unwrap(),
         );
     }
-    println!(
-        "{} {} is equal to {} {} (rate: {})",
-        params.amount,
-        params.source_currency_code,
-        after_exchange.unwrap(),
-        params.target_currency_code,
-        get_rate(&rates, &params.target_currency_code).unwrap(),
-    );
+
     Ok(())
 }
 

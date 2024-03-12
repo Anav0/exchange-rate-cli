@@ -6,7 +6,7 @@ API_KEY variable needs to be defined in .env file
 
 Usage can be printed by running cli program with --help flag
 
-`cargo run -- -s PLN -t USD -a 2.253`
+`cargo run -- -s PLN -t USD,EUR -a 2.253`
 
 `cargo run -- -s PLN --list`
 

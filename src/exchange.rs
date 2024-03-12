@@ -27,7 +27,7 @@ impl Display for ApiError {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Rates {
-    data: HashMap<String, f32>,
+    pub data: HashMap<String, f32>,
 }
 
 impl Display for Rates {
@@ -71,13 +71,12 @@ pub fn fetch<U: Display+ IntoUrl, T: for<'a> Deserialize<'a>>(url: U) -> Result<
     Ok(obj)
 }
 
-pub fn fetch_rates<'a, C, T>(source: &str, targets: C, api_key: &str) -> Result<Rates>
+pub fn fetch_rates<'a, T>(source: &str, targets: &[T], api_key: &str) -> Result<Rates>
 where
-    C: IntoIterator<Item = T>,
     T: AsRef<str>,
     [T]: Join<&'a str, Output = String>,
 {
-    let joined_codes = targets.into_iter().collect::<Vec<T>>().join(",");
+    let joined_codes = targets.join(",");
     let full_url =
         format!("{API_URL}/latest?apikey={api_key}&currencies={joined_codes}&base_currency={source}");
     let rates: Rates = fetch(full_url)?;
