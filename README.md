@@ -20,5 +20,7 @@ To switch to nightly you have to run: `rustup default nightly` and then restart 
 
 - Clear old cache files
 - Tests
-- i18n
-- logging of requests
+- I18n
+- Logging of requests
+- Accounting for different decimal digits of currencies
+- *maybe* move cach to OS specific places AppData on windows for example. I don't think it is a good idea but maybe maybe..
