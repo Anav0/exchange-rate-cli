@@ -16,10 +16,8 @@ struct ApiError {
 
 impl Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ApiError: {}\n", self.message)?;
-        write!(f, "Errors:\n")?;
-        for (key, value) in &self.errors {
-            write!(f, " - {}: {}\n", key, value.join(", "))?;
+        for (_, value) in &self.errors {
+            write!(f, "{}\n", value.join(", "))?;
         }
         Ok(())
     }
@@ -49,13 +47,14 @@ pub struct Currency {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct CurrencyInfo {
+pub struct Currencies {
     pub data: HashMap<String, Currency>,
 }
 
-const API_URL: &str = "https://api.freecurrencyapi.com/v1/";
+const API_URL: &str = "https://api.freecurrencyapi.com/v1";
 
-pub fn fetch<U: Display+ IntoUrl, T: for<'a> Deserialize<'a>>(url: U) -> Result<T> {
+pub fn fetch<U: std::fmt::Debug + Display + IntoUrl, T: for<'a> Deserialize<'a>>(url: U) -> Result<T> {
+    dbg!(&url);
     let response: Response = reqwest::blocking::get(url)?;
     if response.status() == 422 {
         let error: ApiError = response.json().expect("Faild to parse API error message");
@@ -77,14 +76,15 @@ where
     [T]: Join<&'a str, Output = String>,
 {
     let joined_codes = targets.join(",");
-    let full_url =
-        format!("{API_URL}/latest?apikey={api_key}&currencies={joined_codes}&base_currency={source}");
+    let full_url = format!(
+        "{API_URL}/latest?apikey={api_key}&currencies={joined_codes}&base_currency={source}"
+    );
     let rates: Rates = fetch(full_url)?;
     Ok(rates)
 }
 
-pub fn fetch_currency_info(source: &str, api_key: &str) -> Result<CurrencyInfo> {
-    let full_url = format!("{API_URL}/currencies?apikey={api_key}&base_currency={source}");
+pub fn fetch_currencies(api_key: &str) -> Result<Currencies> {
+    let full_url = format!("{API_URL}/currencies?apikey={api_key}");
     let currency_info = fetch(full_url)?;
     Ok(currency_info)
 }

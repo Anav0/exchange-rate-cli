@@ -12,6 +12,19 @@ pub struct Parameters {
     pub print_help: bool,
 }
 
+impl Parameters {
+    pub fn new() -> Self {
+        Self {
+            source_currency_code: String::new(),
+            target_currency_code: vec![],
+            amount: 0.,
+            list_all_rates: false,
+            force_refetch: false,
+            print_help: false,
+        }
+    }
+}
+
 impl TryFrom<std::env::Args> for Parameters {
     fn try_from(mut args: std::env::Args) -> Result<Self, Self::Error> {
         let mut force_refetch = false;

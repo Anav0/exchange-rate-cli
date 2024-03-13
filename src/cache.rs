@@ -3,20 +3,27 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
+use crate::exchange::{fetch_currencies, Currencies};
+
+fn get_path_to_cache() -> String {
+    return String::from("./.teonite/cache");
+}
+
 // NOTE: Cached hourly
 pub fn get_path_to_exchange_cache(source: &str) -> PathBuf {
     return PathBuf::from(format!(
-        r"./.teonite/cache/{}{}.json",
+        r"{}/{}{}.json",
+        get_path_to_cache(),
         source,
         get_date_formatted("%H00%d%m%Y")
     ));
 }
 
 // NOTE: Cached daily
-pub fn get_path_to_currency_cache(source: &str) -> PathBuf {
+pub fn get_path_to_currencies_cache() -> PathBuf {
     return PathBuf::from(format!(
-        r"./.teonite/cache/{}{}.json",
-        source,
+        r"{}/{}.json",
+        get_path_to_cache(),
         get_date_formatted("%d%m%Y")
     ));
 }
@@ -26,9 +33,9 @@ fn get_date_formatted(format: &str) -> String {
     utc.format(format).to_string()
 }
 
-pub fn cache_data<T: Serialize>(path: &PathBuf, rates: &T) -> Result<()> {
+pub fn cache_data<T: Serialize>(path: &PathBuf, data: &T) -> Result<()> {
     fs::create_dir_all(path.parent().unwrap())?; //unwrap since we know we have parent dir
-    let serialized: String = serde_json::to_string(rates)?;
+    let serialized: String = serde_json::to_string(data)?;
 
     fs::write(&path, serialized)
         .context(format!("Failed to cache exchange rates: '{:?}'", path))?;
@@ -45,4 +52,22 @@ pub fn read_from_cache<T: for<'a> Deserialize<'a>>(path: &PathBuf) -> Option<T> 
         }
         Err(_) => None,
     };
+}
+
+pub fn clear_cache() -> Result<()> {
+    let path = get_path_to_cache();
+    fs::remove_dir_all(path)?;
+    Ok(())
+}
+
+pub fn fresh_currency_info_exists_in_cache() -> bool {
+    let path = &get_path_to_currencies_cache();
+    read_from_cache::<Currencies>(path).is_some()
+}
+
+pub fn update_currency_info_cache(api_key: &str) -> Result<()> {
+    let info = fetch_currencies(api_key)?;
+    let path = get_path_to_currencies_cache();
+    cache_data(&path, &info)?;
+    Ok(())
 }

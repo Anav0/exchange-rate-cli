@@ -1,17 +1,23 @@
 #![feature(slice_concat_trait)]
 
 use crate::{
-    cache::{cache_data, get_path_to_currency_cache, get_path_to_exchange_cache, read_from_cache},
-    exchange::{exchange, fetch_currency_info, fetch_rates, get_rate, Rates},
+    cache::{
+        cache_data, get_path_to_currencies_cache, get_path_to_exchange_cache, read_from_cache,
+    },
+    exchange::{exchange, fetch_currencies, fetch_rates, get_rate, Rates},
     params::Parameters,
 };
 use anyhow::{bail, Context, Result};
+use cache::{fresh_currency_info_exists_in_cache, update_currency_info_cache};
 use dotenv::dotenv;
+use exchange::Currencies;
 use std::env;
+use validation::validate;
 
 mod cache;
 mod exchange;
 mod params;
+mod validation;
 
 // Git style help printing
 fn print_help() {
@@ -29,7 +35,7 @@ fn print_help() {
 }
 
 fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
-    let path = get_path_to_currency_cache(&params.source_currency_code);
+    let path = get_path_to_currencies_cache();
     let currency_info = read_from_cache(&path)
         .and_then(|v| {
             if params.force_refetch {
@@ -38,7 +44,7 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
             Some(v)
         })
         .or_else(|| {
-            fetch_currency_info(&params.source_currency_code, &api_key)
+            fetch_currencies(&api_key)
                 .map_err(|e| println!("{}", e))
                 .inspect(|info| {
                     let _ = cache_data(&path, info);
@@ -49,9 +55,12 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
         bail!("Failed to fetch currency information");
     }
     let currency_info = currency_info.unwrap();
+    cache_data(&path, &currency_info)?;
+
+    let path = get_path_to_exchange_cache(&params.source_currency_code);
     let codes: Vec<String> = currency_info.data.keys().cloned().collect();
     let rates = fetch_rates(&params.source_currency_code, &codes, &api_key)?;
-    cache_data(&path, &currency_info)?;
+    cache_data(&path, &rates)?;
     println!("{}", rates);
     Ok(())
 }
@@ -72,7 +81,7 @@ fn update_exchange_rate_cache(
     }
 
     if !not_cached_target_exists {
-        return Some(cached_rates)
+        return Some(cached_rates);
     }
 
     let fetched_rate = fetch_rates(&source, targets, &api_key).ok()?;
@@ -126,7 +135,7 @@ fn print_selected_exchange_rate(params: &Parameters, api_key: &str) -> Result<()
             );
         }
         println!(
-            "{:.3} {} is equal to {:.3} {} (rate: {})",
+            "{:.2} {} is equal to {:.2} {} (rate: {})",
             params.amount,
             params.source_currency_code,
             after_exchange.unwrap(),
@@ -144,6 +153,12 @@ fn main() -> Result<()> {
     let api_key: String = std::env::var("API_KEY").context("API_KEY must be set in .env file")?;
 
     let params = Parameters::try_from(env::args())?;
+
+    if !fresh_currency_info_exists_in_cache() || params.force_refetch {
+        update_currency_info_cache(&api_key)?;
+    }
+
+    validate(&params)?;
 
     if params.print_help {
         print_help();
