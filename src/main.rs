@@ -61,7 +61,8 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
     let codes: Vec<String> = currency_info.data.keys().cloned().collect();
     let rates = fetch_rates(&params.source_currency_code, &codes, &api_key)?;
     cache_data(&path, &rates)?;
-    println!("{}", rates);
+    println!("Source currency: '{}'", &params.source_currency_code);
+    rates.print_with_info(&currency_info);
     Ok(())
 }
 

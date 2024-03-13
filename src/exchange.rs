@@ -28,6 +28,20 @@ pub struct Rates {
     pub data: HashMap<String, f32>,
 }
 
+impl Rates {
+    pub fn print_with_info(&self, info: &Currencies) {
+        println!("{:<25} {:<4} {}", "Name", "Code", "Rate");
+        println!("{:-<42}", "");
+        for (currency, rate) in &self.data {
+            if let Some(info) = info.data.get(currency) {
+                println!("{:<25} {:<4}: {}", info.name, currency, rate);
+            } else {
+                println!("{:<25} {:<4}: {}", " ", currency, rate);
+            }
+        }
+    }
+}
+
 impl Display for Rates {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (currency, rate) in &self.data {
@@ -53,7 +67,9 @@ pub struct Currencies {
 
 const API_URL: &str = "https://api.freecurrencyapi.com/v1";
 
-pub fn fetch<U: std::fmt::Debug + Display + IntoUrl, T: for<'a> Deserialize<'a>>(url: U) -> Result<T> {
+pub fn fetch<U: std::fmt::Debug + Display + IntoUrl, T: for<'a> Deserialize<'a>>(
+    url: U,
+) -> Result<T> {
     dbg!(&url);
     let response: Response = reqwest::blocking::get(url)?;
     if response.status() == 422 {
