@@ -10,10 +10,11 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cache::{fresh_currency_info_exists_in_cache, update_currency_info_cache};
 use dotenv::dotenv;
-use exchange::Currencies;
+use http::HttpClient;
 use std::env;
 use validation::validate;
 
+mod http;
 mod cache;
 mod exchange;
 mod params;
@@ -34,7 +35,7 @@ fn print_help() {
     println!("{:<12}{}", "-f, --force", "fetch data each time");
 }
 
-fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
+fn print_all_exchange_rates(client: &HttpClient, params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_currencies_cache();
     let currency_info = read_from_cache(&path)
         .and_then(|v| {
@@ -44,7 +45,7 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
             Some(v)
         })
         .or_else(|| {
-            fetch_currencies(&api_key)
+            fetch_currencies(client, &api_key)
                 .map_err(|e| println!("{}", e))
                 .inspect(|info| {
                     let _ = cache_data(&path, info);
@@ -59,7 +60,7 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
 
     let path = get_path_to_exchange_cache(&params.source_currency_code);
     let codes: Vec<String> = currency_info.data.keys().cloned().collect();
-    let rates = fetch_rates(&params.source_currency_code, &codes, &api_key)?;
+    let rates = fetch_rates(client, &params.source_currency_code, &codes, &api_key)?;
     cache_data(&path, &rates)?;
     println!("Source currency: '{}'", &params.source_currency_code);
     rates.print_with_info(&currency_info);
@@ -68,6 +69,7 @@ fn print_all_exchange_rates(params: &Parameters, api_key: &str) -> Result<()> {
 
 //TODO: change String to AsRef
 fn update_exchange_rate_cache(
+    client: &HttpClient,
     source: &str,
     targets: &Vec<String>,
     api_key: &str,
@@ -85,7 +87,7 @@ fn update_exchange_rate_cache(
         return Some(cached_rates);
     }
 
-    let fetched_rate = fetch_rates(&source, targets, &api_key).ok()?;
+    let fetched_rate = fetch_rates(client, &source, targets, &api_key).ok()?;
 
     for (code, rate) in fetched_rate.data {
         cached_rates.data.insert(code, rate);
@@ -96,11 +98,12 @@ fn update_exchange_rate_cache(
     Some(cached_rates)
 }
 
-fn print_selected_exchange_rate(params: &Parameters, api_key: &str) -> Result<()> {
+fn print_selected_exchange_rate(client: &HttpClient, params: &Parameters, api_key: &str) -> Result<()> {
     let path = get_path_to_exchange_cache(&params.source_currency_code);
     let rates: Option<Rates> = read_from_cache(&path)
         .and_then(|v| {
             update_exchange_rate_cache(
+                client,
                 &params.source_currency_code,
                 &params.target_currency_code,
                 &api_key,
@@ -109,6 +112,7 @@ fn print_selected_exchange_rate(params: &Parameters, api_key: &str) -> Result<()
         })
         .or_else(|| {
             fetch_rates(
+                client,
                 &params.source_currency_code,
                 &params.target_currency_code,
                 &api_key,
@@ -149,29 +153,37 @@ fn print_selected_exchange_rate(params: &Parameters, api_key: &str) -> Result<()
 }
 
 fn main() -> Result<()> {
+    
+
+    let client = HttpClient::default();
+
     dotenv().ok();
-
-    let api_key: String = std::env::var("API_KEY").context("API_KEY must be set in .env file")?;
-
+    
     let params = Parameters::try_from(env::args())?;
-
-    if !fresh_currency_info_exists_in_cache() || params.force_refetch {
-        update_currency_info_cache(&api_key)?;
-    }
-
-    validate(&params)?;
 
     if params.print_help {
         print_help();
         return Ok(());
     }
 
+    let api_key: String = std::env::var("API_KEY").context("API_KEY enviroment variable must be set")?;
+
+    if api_key == "" {
+        bail!("Invalid API key, please provide valid API_KEY enviroment variable");
+    }
+
+    if !fresh_currency_info_exists_in_cache() || params.force_refetch {
+        update_currency_info_cache(&client, &api_key)?;
+    }
+
+    validate(&params)?;
+
     if params.list_all_rates {
-        print_all_exchange_rates(&params, &api_key)?;
+        print_all_exchange_rates(&client, &params, &api_key)?;
         return Ok(());
     }
 
-    print_selected_exchange_rate(&params, &api_key)?;
+    print_selected_exchange_rate(&client, &params, &api_key)?;
 
     Ok(())
 }

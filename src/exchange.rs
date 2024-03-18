@@ -5,8 +5,10 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use reqwest::{blocking::Response, IntoUrl};
+use reqwest::{blocking::{Client, Response}, IntoUrl};
 use serde::{Deserialize, Serialize};
+
+use crate::http::HttpClient;
 
 #[derive(Debug, Deserialize)]
 struct ApiError {
@@ -66,27 +68,8 @@ pub struct Currencies {
 }
 
 const API_URL: &str = "https://api.freecurrencyapi.com/v1";
-
-pub fn fetch<U: std::fmt::Debug + Display + IntoUrl, T: for<'a> Deserialize<'a>>(
-    url: U,
-) -> Result<T> {
-    dbg!(&url);
-    let response: Response = reqwest::blocking::get(url)?;
-    if response.status() == 422 {
-        let error: ApiError = response.json().expect("Faild to parse API error message");
-        bail!("{}", error);
-    }
-    let obj: T = response.json().with_context(|| {
-        format!(
-            "Faild to parse requests response as: {}",
-            std::any::type_name::<T>()
-        )
-    })?;
-
-    Ok(obj)
-}
-
-pub fn fetch_rates<'a, T>(source: &str, targets: &[T], api_key: &str) -> Result<Rates>
+    
+pub fn fetch_rates<'a, T>(client: &HttpClient, source: &str, targets: &[T], api_key: &str) -> Result<Rates>
 where
     T: AsRef<str>,
     [T]: Join<&'a str, Output = String>,
@@ -95,13 +78,13 @@ where
     let full_url = format!(
         "{API_URL}/latest?apikey={api_key}&currencies={joined_codes}&base_currency={source}"
     );
-    let rates: Rates = fetch(full_url)?;
+    let rates: Rates = client.fetch::<String, Rates, ApiError>(full_url)?;
     Ok(rates)
 }
 
-pub fn fetch_currencies(api_key: &str) -> Result<Currencies> {
+pub fn fetch_currencies(client: &HttpClient, api_key: &str) -> Result<Currencies> {
     let full_url = format!("{API_URL}/currencies?apikey={api_key}");
-    let currency_info = fetch(full_url)?;
+    let currency_info = client.fetch::<String, Currencies, ApiError>(full_url)?;
     Ok(currency_info)
 }
 

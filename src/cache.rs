@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
-use crate::exchange::{fetch_currencies, Currencies};
+use crate::{exchange::{fetch_currencies, Currencies}, http::HttpClient};
 
 fn get_path_to_cache() -> String {
     return String::from("./.teonite/cache");
@@ -65,8 +65,8 @@ pub fn fresh_currency_info_exists_in_cache() -> bool {
     read_from_cache::<Currencies>(path).is_some()
 }
 
-pub fn update_currency_info_cache(api_key: &str) -> Result<()> {
-    let info = fetch_currencies(api_key)?;
+pub fn update_currency_info_cache(client: &HttpClient, api_key: &str) -> Result<()> {
+    let info = fetch_currencies(client, api_key)?;
     let path = get_path_to_currencies_cache();
     cache_data(&path, &info)?;
     Ok(())
