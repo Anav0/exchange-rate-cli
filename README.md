@@ -1,4 +1,6 @@
-# Usage 
+[![Rust CI](https://github.com/Anav0/exchange-rate-cli/actions/workflows/build.yml/badge.svg)](https://github.com/Anav0/exchange-rate-cli/actions/workflows/build.yml)
+
+# Usage
 
 This is the exchange API I've used
 
