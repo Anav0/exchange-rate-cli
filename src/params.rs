@@ -49,7 +49,7 @@ impl TryFrom<std::env::Args> for Parameters {
 
                     target_currency_code = target_currency_str
                         .split(",")
-                        .map(|v| v.to_string())
+                        .map(|v| v.to_string().to_uppercase())
                         .collect();
                 }
                 "-a" => {
@@ -71,9 +71,9 @@ impl TryFrom<std::env::Args> for Parameters {
                 _ => {}
             }
         }
-
+        
         Ok(Self {
-            source_currency_code,
+            source_currency_code: source_currency_code.to_uppercase(),
             target_currency_code,
             amount,
             force_refetch,
