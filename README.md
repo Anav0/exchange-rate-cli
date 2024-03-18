@@ -4,7 +4,7 @@ This is the exchange API I've used
 
 https://app.freecurrencyapi.com/
 
-API_KEY variable needs to be defined in .env file
+API_KEY variable needs to be defined
 
 Usage can be printed by running cli program with --help flag
 
@@ -24,3 +24,7 @@ To switch to nightly you have to run: `rustup default nightly` and then restart 
 - Logging of requests
 - Accounting for different decimal digits of currencies
 - *maybe* move cach to OS specific places AppData on windows for example. I don't think it is a good idea but maybe maybe..
+
+# Docker
+
+Add your api key to `Dockerfile` or specify it while running docker container
